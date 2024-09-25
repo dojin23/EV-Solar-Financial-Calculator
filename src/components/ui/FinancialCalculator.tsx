@@ -7,9 +7,14 @@ import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
-import { DollarSign, Zap, Sun, HelpCircle, Battery, TrendingUp, Clock, CreditCard, Gift, Award } from 'lucide-react';
+import { DollarSign, Zap, Sun, HelpCircle, Battery, TrendingUp, Clock, CreditCard, Gift, Award, Calculator } from 'lucide-react';
 import { CashFlowTable } from "@/components/ui/CashFlowTable";
 import { MetricCard } from "@/components/ui/MetricCard";
+import { Checkbox } from "@/components/ui/checkbox";
+import { CheckIcon } from '@heroicons/react/solid';
+import { Button } from "@/components/ui/button";
+import { pdf } from '@react-pdf/renderer';
+import FinancialReportPDF from './FinancialReportPDF';
 
 // Utility functions
 const formatCurrency = (value: number | null): string => {
@@ -17,9 +22,17 @@ const formatCurrency = (value: number | null): string => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 };
 
+// Format IRR and ROI as percentages
 const formatPercentage = (value: number | null): string => {
+  if (value === null || isNaN(value)) return 'N/A';
+  return `${value.toFixed(2)}%`;
+};
+
+
+// Display Payback Period in years without dollar sign
+const formatYears = (value: number | null): string => {
   if (value === null) return 'N/A';
-  return `${(value * 100).toFixed(2)}%`;
+  return `${value.toFixed(2)} years`;
 };
 
 const calculateNPV = (cashFlows: number[], discountRate: number, initialInvestment: number): number => {
@@ -55,10 +68,12 @@ const calculatePaybackPeriod = (cashFlows: number[], initialInvestment: number):
   for (let i = 0; i < cashFlows.length; i++) {
     cumulativeCashFlow += cashFlows[i];
     if (cumulativeCashFlow >= 0) {
-      return i + (cumulativeCashFlow / cashFlows[i]);
+      const previousCumulative = cumulativeCashFlow - cashFlows[i];
+      const fraction = (-previousCumulative) / cashFlows[i]; // Corrected formula
+      return i + fraction;
     }
   }
-  return null; // Payback period not reached
+  return null; // Investment not recovered within the period
 };
 
 const calculateLoanPayment = (principal: number, annualRate: number, termYears: number) => {
@@ -69,7 +84,7 @@ const calculateLoanPayment = (principal: number, annualRate: number, termYears: 
 
 export default function FinancialCalculator() {
   // All useState hooks
-  const [financingType, setFinancingType] = useState('loan');
+  const [financingType, setFinancingType] = useState('cash');
   const [loanDetails, setLoanDetails] = useState({ apr: 5, term: 10, downPayment: 20000 });
   const [location, setLocation] = useState('MD');
   const [srecEligibilityYears, setSrecEligibilityYears] = useState(5); // Default to 5 years
@@ -77,8 +92,8 @@ export default function FinancialCalculator() {
     numStations: 4,
     costPerStation: 50000,
     pricePerKwh: 0.45, // Price charged per kWh
-    sessionsPerDay: 10, // Average sessions per day per station
-    energyPerSession: 20, // Average kWh per session
+    sessionsPerDay: 6, // Changed from 10 to 6
+    energyPerSession: 30, // Changed from 20 to 30
     operationalYears: 20
   });
   const [solarSystem, setSolarSystem] = useState({
@@ -87,7 +102,8 @@ export default function FinancialCalculator() {
     annualProduction: 120000, // in kWh
   });
   const [batteryDetails, setBatteryDetails] = useState({
-    totalCost: 100000, // Total cost of the battery system
+    numBatteries: 1,
+    costPerBattery: 100000,
     capacity: 200, // kWh
     efficiency: 0.9, // 90% round-trip efficiency
     cycleLife: 4000, // number of full charge/discharge cycles
@@ -104,14 +120,17 @@ export default function FinancialCalculator() {
   const [incentives, setIncentives] = useState({
     baseTaxCredit: 30,
     additionalTaxCredit: false,
-    utilityRebatePerCharger: 5000,
+    utilityRebatePerCharger: 15000, // Changed from 5000 to 15000
   });
-  const [annualUtilityRate, setAnnualUtilityRate] = useState(0.12);
+  const [annualUtilityRate, setAnnualUtilityRate] = useState(0.03);
   const [baselineElectricity, setBaselineElectricity] = useState({
     annualConsumption: 100000, // kWh
     annualCost: 12000, // $
-    rate: 0.12, // $/kWh
+    rate: 0.12, // $/kWh (initial value, will be updated)
   });
+  const [evChargeEscalator, setEvChargeEscalator] = useState(0.02); // 2% annual increase
+  const [includeBattery, setIncludeBattery] = useState(false);
+  const [solarOffset, setSolarOffset] = useState(50); // Default to 50%
 
   // Update this whenever annualConsumption or annualCost changes
   useEffect(() => {
@@ -125,7 +144,8 @@ export default function FinancialCalculator() {
 
   const totalSolarCost = solarSystem.systemSize * 1000 * solarSystem.costPerWatt;
   const totalEvStationsCost = evDetails.numStations * evDetails.costPerStation;
-  const totalProjectCost = totalSolarCost + totalEvStationsCost;
+  const totalBatteryCost = includeBattery ? batteryDetails.numBatteries * batteryDetails.costPerBattery : 0;
+  const totalProjectCost = totalSolarCost + totalEvStationsCost + totalBatteryCost;
 
   const baseTaxCreditAmount = totalProjectCost * (incentives.baseTaxCredit / 100);
   const additionalTaxCreditAmount = incentives.additionalTaxCredit ? totalProjectCost * 0.1 : 0;
@@ -136,57 +156,67 @@ export default function FinancialCalculator() {
   const annualSrecRevenue = annualSrecs * srecPrice;
   const totalSrecRevenue = annualSrecRevenue * srecEligibilityYears;
 
-  const totalIncentives = baseTaxCreditAmount + additionalTaxCreditAmount + utilityRebateAmount + totalSrecRevenue;
+  // Exclude totalSrecRevenue from totalIncentives
+  const totalIncentives = baseTaxCreditAmount + additionalTaxCreditAmount + utilityRebateAmount;
   const netProjectCost = totalProjectCost - totalIncentives;
 
-  const cashFlows = useMemo(() => {
-    const loanAmount = netProjectCost - loanDetails.downPayment;
-    const monthlyPayment = calculateLoanPayment(loanAmount, loanDetails.apr, loanDetails.term);
-    const annualPayment = monthlyPayment * 12;
+  const macrsSchedule = [0.2, 0.32, 0.192, 0.1152, 0.1152, 0.0576, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-    return Array.from({ length: evDetails.operationalYears }, (_, year) => {
-      const evRevenue = evDetails.numStations * evDetails.sessionsPerDay * evDetails.energyPerSession * evDetails.pricePerKwh * 365;
-      const solarSavings = solarSystem.annualProduction * baselineElectricity.rate;
-      const srecRevenue = year < srecEligibilityYears ? annualSrecRevenue : 0;
-      const gridCost = 0; // Assuming no grid cost for simplicity
-      const maintenanceCost = maintenanceCosts.evChargerAnnual * evDetails.numStations + maintenanceCosts.solarAnnual;
-      const loanPayment = year < loanDetails.term ? annualPayment : 0;
+  const financialMetrics = useMemo(() => {
+    const annualEvRevenue = evDetails.numStations * evDetails.sessionsPerDay * evDetails.energyPerSession * evDetails.pricePerKwh * 365;
+    const loanTotalCost = financingType === 'loan' ? (loanDetails.apr / 100 * loanDetails.term * (totalProjectCost - loanDetails.downPayment)) + totalProjectCost : 0;
+    const initialInvestment = netProjectCost;
+    const discountRate = financingType === 'loan' ? loanDetails.apr / 100 : 0.1; // Define discount rate here
+
+    const cashFlows = Array.from({ length: evDetails.operationalYears }, (_, year) => {
+      const evEnergyDemand = evDetails.numStations * evDetails.sessionsPerDay * evDetails.energyPerSession * 365;
+      const solarEnergyUsed = Math.min(solarSystem.annualProduction, evEnergyDemand * (solarOffset / 100));
+      const gridEnergyUsed = Math.max(0, evEnergyDemand - solarEnergyUsed);
+
+      const evRevenue = evDetails.numStations * evDetails.sessionsPerDay * evDetails.energyPerSession * 
+        (evDetails.pricePerKwh * Math.pow(1 + evChargeEscalator, year)) * 365;
+      const gridCost = gridEnergyUsed * gridElectricity.rate * Math.pow(1 + annualUtilityRate, year);
+      const maintenanceCost = (maintenanceCosts.evChargerAnnual * evDetails.numStations + maintenanceCosts.solarAnnual) * Math.pow(1.03, year);
+      const batteryCost = includeBattery ? maintenanceCosts.batteryAnnual * batteryDetails.numBatteries * Math.pow(1.03, year) : 0;
+      const totalMaintenanceCost = maintenanceCost + batteryCost;
+      const loanPayment = financingType === 'loan' && year < loanDetails.term ? calculateLoanPayment(totalProjectCost - loanDetails.downPayment, loanDetails.apr, loanDetails.term) : 0;
       
-      // Add utility rebate only in the first year
-      const utilityRebate = year === 0 ? utilityRebateAmount : 0;
-      
-      const profit = evRevenue + solarSavings + srecRevenue + utilityRebate - gridCost - maintenanceCost - loanPayment;
-      const taxes = profit * 0.21; // Assuming 21% corporate tax rate
+      const profit = evRevenue - gridCost - totalMaintenanceCost - loanPayment;
+      const depreciableBasis = totalProjectCost - (0.5 * baseTaxCreditAmount);
+      const depreciation = (macrsSchedule[year] || 0) * depreciableBasis;
+      const taxableIncome = profit - depreciation;
+      const taxes = taxableIncome > 0 ? taxableIncome * 0.21 : 0;
       const cashFlow = profit - taxes;
+      let cumulativeCashFlow = year === 0 ? -netProjectCost : 0;
+      cumulativeCashFlow += cashFlow;
+      const discountedCashFlow = cashFlow / Math.pow(1 + discountRate, year + 1);
 
       return {
         year: year + 1,
         evRevenue,
-        solarSavings,
-        srecRevenue,
-        utilityRebate,
         gridCost,
-        maintenanceCost,
+        maintenanceCost: totalMaintenanceCost,
         loanPayment,
         profit,
         taxes,
-        cashFlow
+        depreciation,
+        cashFlow,
+        cumulativeCashFlow,
+        discountedCashFlow
       };
     });
-  }, [evDetails, solarSystem, baselineElectricity.rate, srecEligibilityYears, location, maintenanceCosts, netProjectCost, loanDetails, annualSrecRevenue, utilityRebateAmount]);
 
-  // All useMemo hooks
-  const financialMetrics = useMemo(() => {
-    const annualEvRevenue = evDetails.numStations * evDetails.sessionsPerDay * evDetails.energyPerSession * evDetails.pricePerKwh * 365;
-    const annualSolarSavings = solarSystem.annualProduction * baselineElectricity.rate;
+    const cashFlowsOnly = cashFlows.map(flow => flow.cashFlow);
+    const npv = calculateNPV(cashFlowsOnly, discountRate, initialInvestment);
+    const irr = calculateIRR([-initialInvestment, ...cashFlowsOnly]);
+    const paybackPeriod = calculatePaybackPeriod(cashFlowsOnly, initialInvestment);
+    const totalCashFlow = cashFlowsOnly.reduce((sum, flow) => sum + flow, 0);
+    const totalYears = evDetails.operationalYears;
+    const roi = ((totalCashFlow - initialInvestment) / initialInvestment) * 100;
+    const annualizedROI = roi / totalYears;
 
-    const cashFlowsWithInitialInvestment = [-netProjectCost, ...cashFlows.map(flow => flow.cashFlow)];
-    const irr = calculateIRR(cashFlowsWithInitialInvestment);
-    const npv = calculateNPV(cashFlows.map(flow => flow.cashFlow), loanDetails.apr / 100, netProjectCost);
-    const paybackPeriod = calculatePaybackPeriod(cashFlows.map(flow => flow.cashFlow), netProjectCost);
-
-    const totalCashFlow = cashFlows.reduce((sum, flow) => sum + flow.cashFlow, 0);
-    const roi = (totalCashFlow - netProjectCost) / netProjectCost;
+    const evEnergyDemand = evDetails.numStations * evDetails.sessionsPerDay * evDetails.energyPerSession * 365;
+    const solarEnergyUsed = Math.min(solarSystem.annualProduction, evEnergyDemand * (solarOffset / 100));
 
     return {
       totalProjectCost,
@@ -197,25 +227,46 @@ export default function FinancialCalculator() {
       baseTaxCreditAmount,
       additionalTaxCreditAmount,
       utilityRebateAmount,
-      totalSrecRevenue,
-      irr: irr !== null ? irr : null,
+      irr: irr !== null ? irr * 100 : null,
       paybackPeriod: paybackPeriod !== null ? paybackPeriod : null,
       npv: !isNaN(npv) ? npv : null,
       totalRevenue: totalCashFlow,
-      annualSolarSavings,
       annualSrecRevenue,
+      annualizedROI: annualizedROI * 100,
+      cashFlows,
+      loanTotalCost,
+      evEnergyDemand,
+      solarEnergyUsed,
       roi,
-      cashFlows
+      annualizedROI
     };
-  }, [cashFlows, evDetails, solarSystem, baselineElectricity.rate, loanDetails, totalProjectCost, totalIncentives, netProjectCost, baseTaxCreditAmount, additionalTaxCreditAmount, utilityRebateAmount, totalSrecRevenue, annualSrecRevenue]);
+  }, [evDetails, solarSystem, baselineElectricity.rate, loanDetails, totalProjectCost, totalIncentives, netProjectCost, baseTaxCreditAmount, additionalTaxCreditAmount, utilityRebateAmount, totalSrecRevenue, annualSrecRevenue, evChargeEscalator, financingType, solarOffset, gridElectricity, annualUtilityRate, includeBattery, batteryDetails]);
 
   // All useCallback hooks
-  const validateInput = useCallback((value, min, max) => {
+  const validateInput = useCallback((value: string, min: number, max: number) => {
     const num = parseFloat(value);
     return isNaN(num) ? min : Math.max(min, Math.min(max, num));
   }, []);
 
-  const renderInputField = useCallback(({ id, label, value, onChange, min, max, step, tooltip }) => {
+  const renderInputField = useCallback(({ 
+    id, 
+    label, 
+    value, 
+    onChange, 
+    min, 
+    max, 
+    step, 
+    tooltip 
+  }: {
+    id: string;
+    label: string;
+    value: number | string;
+    onChange: (value: number) => void;
+    min: number;
+    max: number;
+    step: number;
+    tooltip: string;
+  }) => {
     return (
       <div key={id} className="mb-4 relative">
         <Label htmlFor={id} className="flex items-center">
@@ -249,14 +300,24 @@ export default function FinancialCalculator() {
   const renderBatteryInputFields = () => (
     <>
       {renderInputField({
-        id: "batteryTotalCost",
-        label: "Total Battery System Cost ($)",
-        value: batteryDetails.totalCost,
-        onChange: (value) => setBatteryDetails(prev => ({ ...prev, totalCost: value })),
+        id: "numBatteries",
+        label: "Number of Batteries",
+        value: batteryDetails.numBatteries,
+        onChange: (value) => setBatteryDetails(prev => ({ ...prev, numBatteries: value })),
+        min: 1,
+        max: 100,
+        step: 1,
+        tooltip: "The number of battery units in the system"
+      })}
+      {renderInputField({
+        id: "costPerBattery",
+        label: "Cost per Battery ($)",
+        value: batteryDetails.costPerBattery,
+        onChange: (value) => setBatteryDetails(prev => ({ ...prev, costPerBattery: value })),
         min: 0,
         max: 1000000,
         step: 1000,
-        tooltip: "The total cost of the battery storage system"
+        tooltip: "The cost of each battery unit"
       })}
       {renderInputField({
         id: "batteryCapacity",
@@ -266,7 +327,7 @@ export default function FinancialCalculator() {
         min: 1,
         max: 1000,
         step: 1,
-        tooltip: "The capacity of the battery storage system in kilowatt-hours"
+        tooltip: "The capacity of each battery unit in kilowatt-hours"
       })}
       {renderInputField({
         id: "batteryEfficiency",
@@ -298,6 +359,19 @@ export default function FinancialCalculator() {
         step: 1,
         tooltip: "The depth of discharge for the battery storage system"
       })}
+      <div className="pt-4 border-t">
+        <div className="font-semibold flex items-center mb-2">
+          Total Battery System Cost
+          {renderTooltip(
+            "Total Battery System Cost",
+            formatCurrency(batteryDetails.numBatteries * batteryDetails.costPerBattery),
+            "Number of Batteries × Cost per Battery"
+          )}
+        </div>
+        <p className="text-2xl font-bold text-primary">
+          {formatCurrency(batteryDetails.numBatteries * batteryDetails.costPerBattery)}
+        </p>
+      </div>
     </>
   );
 
@@ -324,30 +398,46 @@ export default function FinancialCalculator() {
         step: 100,
         tooltip: "The annual electricity cost before installing EV chargers and solar"
       })}
+      <div className="pt-4 border-t">
+        <div className="font-semibold flex items-center mb-2">
+          Electricity Cost per kWh
+          {renderTooltip(
+            "Electricity Cost per kWh",
+            formatCurrency(baselineElectricity.rate),
+            "Annual Cost / Annual Consumption"
+          )}
+        </div>
+        <p className="text-2xl font-bold text-primary">
+          {formatCurrency(baselineElectricity.rate)} / kWh
+        </p>
+      </div>
     </>
   );
 
   const renderTooltip = useCallback((label: string, value: string, formula: string) => (
-    <Tooltip content={
-      <div className="space-y-2">
-        <p className="font-bold">{label}</p>
-        <p>{value}</p>
-        <p className="text-xs mt-2">Formula:</p>
-        <p className="text-xs italic break-words">{formula}</p>
-      </div>
-    }>
-      <span className="ml-1 cursor-help">
-        <HelpCircle className="inline h-4 w-4" />
-      </span>
-    </Tooltip>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="ml-1 cursor-help">
+            <HelpCircle className="inline h-4 w-4" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <div className="space-y-2">
+            <p className="font-bold">{label}</p>
+            <p>{value}</p>
+            <p className="text-xs mt-2">Formula:</p>
+            <p className="text-xs italic break-words">{formula}</p>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   ), []);
 
   const renderCashFlowChart = () => {
     const chartData = financialMetrics.cashFlows.map((cf, index) => ({
       year: index,
       'EV Revenue': cf.evRevenue,
-      'Solar Savings': cf.solarSavings,
-      'SREC Revenue': cf.srecRevenue,
       'Cash Flow': cf.cashFlow
     }));
 
@@ -360,8 +450,6 @@ export default function FinancialCalculator() {
           <RechartsTooltip formatter={(value) => formatCurrency(Number(value))} />
           <Legend />
           <Line type="monotone" dataKey="EV Revenue" stroke="#8884d8" />
-          <Line type="monotone" dataKey="Solar Savings" stroke="#82ca9d" />
-          <Line type="monotone" dataKey="SREC Revenue" stroke="#ffc658" />
           <Line type="monotone" dataKey="Cash Flow" stroke="#ff7300" />
         </LineChart>
       </ResponsiveContainer>
@@ -370,6 +458,101 @@ export default function FinancialCalculator() {
 
   const handleLoanDetailsChange = (field: keyof typeof loanDetails, value: number) => {
     setLoanDetails(prev => ({ ...prev, [field]: value }));
+  };
+
+  const renderEscalatorDropdown = () => (
+    <div className="mb-4 relative">
+      <Label htmlFor="evChargeEscalator" className="flex items-center mb-2">
+        EV Charge Price Escalator
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <HelpCircle className="ml-1 h-4 w-4 text-gray-400 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs bg-gray-800 text-white p-2 rounded-md shadow-lg">
+              <p className="text-sm">Annual increase rate for EV charging price</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </Label>
+      <Select value={evChargeEscalator.toString()} onValueChange={(value) => setEvChargeEscalator(parseFloat(value))}>
+        <SelectTrigger className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary">
+          <SelectValue placeholder="Select escalator rate" />
+        </SelectTrigger>
+        <SelectContent className="bg-white border border-gray-300 rounded-md shadow-lg">
+          {Array.from({ length: 30 }, (_, i) => i / 100).map((rate) => (
+            <SelectItem key={rate} value={rate.toString()} className="px-3 py-2 hover:bg-gray-100">
+              {(rate * 100).toFixed(2)}%
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const generateDebugOutput = () => {
+    const debugOutput = {
+      totalSolarCost,
+      totalEvStationsCost,
+      totalBatteryCost,
+      totalProjectCost,
+      baseTaxCreditAmount,
+      additionalTaxCreditAmount,
+      utilityRebateAmount,
+      totalIncentives,
+      netProjectCost,
+      financingType,
+      loanAmount: financingType === 'loan' ? totalProjectCost - loanDetails.downPayment : 0,
+      monthlyLoanPayment: financingType === 'loan' ? calculateLoanPayment(totalProjectCost - loanDetails.downPayment, loanDetails.apr, loanDetails.term) : 0,
+      annualEvRevenue: financialMetrics.annualEvRevenue,
+      paybackPeriod: financialMetrics.paybackPeriod,
+      npv: financialMetrics.npv,
+      irr: financialMetrics.irr,
+      roi: financialMetrics.roi,
+      annualizedROI: financialMetrics.annualizedROI,
+      evChargeEscalator: `${(evChargeEscalator * 100).toFixed(2)}%`,
+      annualUtilityRate: `${(annualUtilityRate * 100).toFixed(2)}%`,
+      firstYearCashFlow: financialMetrics.cashFlows[0]?.cashFlow || 0,
+      fifthYearCashFlow: financialMetrics.cashFlows[4]?.cashFlow || 0,
+      tenthYearCashFlow: financialMetrics.cashFlows[9]?.cashFlow || 0,
+      loanTotalCost: financialMetrics.loanTotalCost,
+      depreciationSchedule: JSON.stringify(financialMetrics.cashFlows.map(flow => ({
+        year: flow.year,
+        depreciation: flow.depreciation.toFixed(2)
+      })))
+    };
+    return JSON.stringify(debugOutput, null, 2);
+  };
+
+  const DepreciationSchedule = ({ schedule }) => (
+    <table>
+      <thead>
+        <tr>
+          <th>Year</th>
+          <th>Depreciation</th>
+        </tr>
+      </thead>
+      <tbody>
+        {schedule.map(({ year, depreciation }) => (
+          <tr key={year}>
+            <td>{year}</td>
+            <td>{formatCurrency(depreciation)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+  const generatePDF = () => {
+    const blob = pdf(<FinancialReportPDF financialMetrics={financialMetrics} cashFlows={financialMetrics.cashFlows} evDetails={evDetails} solarSystem={solarSystem} />).toBlob();
+    blob.then(blobData => {
+      const url = URL.createObjectURL(blobData);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'EV_Solar_Financial_Report.pdf';
+      link.click();
+      URL.revokeObjectURL(url);
+    });
   };
 
   // Render
@@ -444,6 +627,16 @@ export default function FinancialCalculator() {
                   onChange={(e) => setSolarSystem({ ...solarSystem, annualProduction: Number(e.target.value) })}
                 />
               </div>
+              {renderInputField({
+                id: "solarOffset",
+                label: "Solar Offset (%)",
+                value: solarOffset,
+                onChange: (value) => setSolarOffset(value),
+                min: 0,
+                max: 100,
+                step: 1,
+                tooltip: "The percentage of EV charging energy offset by solar production"
+              })}
               <div className="pt-4 border-t">
                 <div className="font-semibold flex items-center mb-2">
                   Total Solar System Cost
@@ -456,6 +649,32 @@ export default function FinancialCalculator() {
                 <p className="text-2xl font-bold text-primary">
                   {formatCurrency(totalSolarCost)}
                 </p>
+              </div>
+              <div className="pt-4 border-t">
+                <div className="flex items-center space-x-2 mt-4">
+                  <div className="relative w-5 h-5 border-2 border-gray-300 rounded-sm">
+                    <Checkbox
+                      id="includeBattery"
+                      checked={includeBattery}
+                      onCheckedChange={(checked) => setIncludeBattery(checked as boolean)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    {includeBattery && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-primary">
+                        <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <Label htmlFor="includeBattery" className="font-semibold text-sm">Include Battery Storage System</Label>
+                </div>
+                {includeBattery && (
+                  <div className="mt-4 space-y-4">
+                    <h3 className="font-semibold">Battery Details</h3>
+                    {renderBatteryInputFields()}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -529,14 +748,19 @@ export default function FinancialCalculator() {
                 step: 1,
                 tooltip: "The expected operational lifespan of the EV charging stations in years"
               })}
-              <div className="space-y-2">
-                <Label htmlFor="annualEvRevenue">Annual EV Revenue</Label>
-                <Input
-                  id="annualEvRevenue"
-                  type="text"
-                  value={formatCurrency(financialMetrics.annualEvRevenue)}
-                  readOnly
-                />
+              {renderEscalatorDropdown()}
+              <div className="pt-4 border-t">
+                <div className="font-semibold flex items-center mb-2">
+                  Annual EV Revenue
+                  {renderTooltip(
+                    "Annual EV Revenue",
+                    formatCurrency(financialMetrics.annualEvRevenue),
+                    "Number of Stations × Sessions per Day × Energy per Session × Price per kWh × 365 days"
+                  )}
+                </div>
+                <p className="text-2xl font-bold text-primary">
+                  {formatCurrency(financialMetrics.annualEvRevenue)}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -596,13 +820,13 @@ export default function FinancialCalculator() {
               <div className="space-y-2">
                 <Label htmlFor="location">Location</Label>
                 <Select value={location} onValueChange={setLocation}>
-                  <SelectTrigger id="location" className="border border-input">
+                  <SelectTrigger id="location" className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary">
                     <SelectValue placeholder="Select location" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MD">Maryland (SREC: $80)</SelectItem>
-                    <SelectItem value="DC">Washington D.C. (SREC: $350)</SelectItem>
-                    <SelectItem value="CA">California (No SREC)</SelectItem>
+                  <SelectContent className="bg-white border border-gray-300 rounded-md shadow-lg">
+                    <SelectItem value="MD" className="px-3 py-2 hover:bg-gray-100">Maryland (SREC: $80)</SelectItem>
+                    <SelectItem value="DC" className="px-3 py-2 hover:bg-gray-100">Washington D.C. (SREC: $350)</SelectItem>
+                    <SelectItem value="Other" className="px-3 py-2 hover:bg-gray-100">Other (No SREC)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -644,15 +868,15 @@ export default function FinancialCalculator() {
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
               <Select value={financingType} onValueChange={setFinancingType}>
-                <SelectTrigger id="financingType">
+                <SelectTrigger id="financingType" className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary">
                   <SelectValue placeholder="Select financing type" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="loan">Loan</SelectItem>
-                  <SelectItem value="cash">Cash</SelectItem>
+                <SelectContent className="bg-white border border-gray-300 rounded-md shadow-lg">
+                  <SelectItem value="loan" className="px-3 py-2 hover:bg-gray-100">Loan</SelectItem>
+                  <SelectItem value="cash" className="px-3 py-2 hover:bg-gray-100">Cash</SelectItem>
                 </SelectContent>
               </Select>
-              {financingType === 'loan' && (
+              {financingType === 'loan' ? (
                 <>
                   {renderInputField({
                     id: "apr",
@@ -680,11 +904,20 @@ export default function FinancialCalculator() {
                     value: loanDetails.downPayment,
                     onChange: (value) => handleLoanDetailsChange('downPayment', value),
                     min: 0,
-                    max: 1000000,
+                    max: totalProjectCost,
                     step: 1000,
                     tooltip: "The initial payment amount for the loan"
                   })}
+                  <div className="mt-4 p-4 bg-gray-100 rounded-md">
+                    <p className="text-sm text-gray-600">
+                      <strong>Total Principal Amount:</strong> {formatCurrency(totalProjectCost - loanDetails.downPayment)}<br />
+                      <strong>Total Interest:</strong> {formatCurrency((calculateLoanPayment(totalProjectCost - loanDetails.downPayment, loanDetails.apr, loanDetails.term) * 12 * loanDetails.term) - (totalProjectCost - loanDetails.downPayment))}<br />
+                      <strong>Total Loan Amount:</strong> {formatCurrency(calculateLoanPayment(totalProjectCost - loanDetails.downPayment, loanDetails.apr, loanDetails.term) * 12 * loanDetails.term)}
+                    </p>
+                  </div>
                 </>
+              ) : (
+                <p className="text-sm text-gray-600">Full cash payment of {formatCurrency(totalProjectCost)} at the start of the project.</p>
               )}
             </CardContent>
           </Card>
@@ -701,13 +934,13 @@ export default function FinancialCalculator() {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
                 <MetricCard
                   title="Internal Rate of Return (IRR)"
-                  value={financialMetrics.irr !== null ? `${(financialMetrics.irr * 100).toFixed(2)}%` : 'N/A'}
+                  value={formatPercentage(financialMetrics.irr)}
                   icon={<TrendingUp className="h-6 w-6 text-blue-500" />}
                   tooltip="The Internal Rate of Return (IRR) is the discount rate that makes the NPV of all cash flows equal to zero."
                 />
                 <MetricCard
                   title="Payback Period"
-                  value={financialMetrics.paybackPeriod !== null ? `${financialMetrics.paybackPeriod.toFixed(2)} years` : 'N/A'}
+                  value={formatYears(financialMetrics.paybackPeriod)}
                   icon={<Clock className="h-6 w-6 text-yellow-500" />}
                   tooltip="The Payback Period is the time it takes for the cumulative cash flow to become positive, essentially recovering the initial investment."
                 />
@@ -718,7 +951,7 @@ export default function FinancialCalculator() {
                   tooltip={`The Net Present Value (NPV) is ${formatCurrency(financialMetrics.npv)}. This represents the difference between the present value of cash inflows and outflows over the project's lifetime, discounted at a rate of ${financingType === 'loan' ? loanDetails.apr : 10}%. A positive NPV indicates that the project is financially viable. Formula: NPV = Σ(Cash Flow / (1 + Discount Rate)^t) - Initial Investment`}
                 />
                 <MetricCard
-                  title="Total Revenue (25 years)"
+                  title={`Total Revenue (${evDetails.operationalYears} years)`}
                   value={formatCurrency(financialMetrics.totalRevenue)}
                   icon={<CreditCard className="h-6 w-6 text-green-500" />}
                   tooltip={`The Total Revenue over the project lifetime is ${formatCurrency(financialMetrics.totalRevenue)}. This includes EV charging revenue, solar savings, and SREC revenue. It's calculated by summing these components for each year of the project's operational life.`}
@@ -736,16 +969,16 @@ export default function FinancialCalculator() {
                   tooltip={`The Annual EV Revenue is ${formatCurrency(financialMetrics.annualEvRevenue)}. This represents the yearly revenue generated from EV charging. It's calculated as: Number of EV Stations × Average Sessions per Day × Average Energy per Session × Price per kWh × 365`}
                 />
                 <MetricCard
-                  title="Annual Solar Savings"
-                  value={formatCurrency(financialMetrics.annualSolarSavings)}
-                  icon={<Sun className="h-6 w-6 text-yellow-500" />}
-                  tooltip={`The Annual Solar Savings are ${formatCurrency(financialMetrics.annualSolarSavings)}. This represents the yearly savings on electricity costs due to solar production. It's calculated as: Annual Solar Production (kWh) × Baseline Electricity Rate ($/kWh)`}
-                />
-                <MetricCard
                   title="Annual SREC Revenue"
                   value={formatCurrency(financialMetrics.annualSrecRevenue)}
                   icon={<Award className="h-6 w-6 text-purple-500" />}
                   tooltip={`The Annual SREC Revenue is ${formatCurrency(financialMetrics.annualSrecRevenue)}. This is the yearly income from selling Solar Renewable Energy Credits. It's calculated as: (Annual Solar Production / 1000) × SREC Price. Note that SREC prices can vary by location and market conditions.`}
+                />
+                <MetricCard
+                  title="Annualized ROI"
+                  value={formatPercentage(financialMetrics.annualizedROI)}
+                  icon={<TrendingUp className="h-6 w-6 text-blue-500" />}
+                  tooltip="The Annualized ROI represents the average annual return over the operational years."
                 />
               </div>
               {/* Add Cash Flow Projection Chart here if needed */}
@@ -754,12 +987,78 @@ export default function FinancialCalculator() {
         </div>
 
         {/* Cash Flow Table */}
+        {/* Commented out to hide the cash flow table
         {financialMetrics.cashFlows && financialMetrics.cashFlows.length > 0 && (
           <CashFlowTable
             cashFlows={financialMetrics.cashFlows}
             initialInvestment={netProjectCost}
           />
         )}
+        */}
+
+        {/* Detailed Financial Schedule */}
+        <Card className="shadow-lg col-span-full mt-6">
+          <CardHeader className="bg-primary/5">
+            <CardTitle className="flex items-center text-xl">
+              <Calculator className="mr-2 h-6 w-6" />
+              Detailed Financial Schedule
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="px-2 py-1 text-left">Year</th>
+                  <th className="px-2 py-1 text-right">EV Revenue</th>
+                  <th className="px-2 py-1 text-right">Grid Cost</th>
+                  <th className="px-2 py-1 text-right">Maintenance Cost</th>
+                  <th className="px-2 py-1 text-right">Loan Payment</th>
+                  <th className="px-2 py-1 text-right">Profit</th>
+                  <th className="px-2 py-1 text-right">Depreciation</th>
+                  <th className="px-2 py-1 text-right">Taxes</th>
+                  <th className="px-2 py-1 text-right">Cash Flow</th>
+                  <th className="px-2 py-1 text-right">Cumulative Cash Flow</th>
+                  <th className="px-2 py-1 text-right">Discounted Cash Flow</th>
+                  <th className="px-2 py-1 text-right">Cumulative ROI</th>
+                </tr>
+              </thead>
+              <tbody>
+                {financialMetrics.cashFlows.map((flow, index) => {
+                  const cumulativeCashFlow = financialMetrics.cashFlows.slice(0, index + 1).reduce((sum, f) => sum + f.cashFlow, 0) - netProjectCost;
+                  const discountedCashFlow = flow.cashFlow / Math.pow(1 + (loanDetails.apr / 100), index + 1);
+                  const cumulativeROI = ((cumulativeCashFlow + netProjectCost) / netProjectCost - 1) * 100;
+                  return (
+                    <tr key={flow.year} className={index % 2 === 0 ? 'bg-gray-50' : ''}>
+                      <td className="px-2 py-1">{flow.year}</td>
+                      <td className="px-2 py-1 text-right">{formatCurrency(flow.evRevenue)}</td>
+                      <td className="px-2 py-1 text-right">{formatCurrency(flow.gridCost)}</td>
+                      <td className="px-2 py-1 text-right">{formatCurrency(flow.maintenanceCost)}</td>
+                      <td className="px-2 py-1 text-right">{formatCurrency(flow.loanPayment)}</td>
+                      <td className="px-2 py-1 text-right">{formatCurrency(flow.profit)}</td>
+                      <td className="px-2 py-1 text-right">{formatCurrency(flow.depreciation)}</td>
+                      <td className="px-2 py-1 text-right">{formatCurrency(flow.taxes)}</td>
+                      <td className="px-2 py-1 text-right">{formatCurrency(flow.cashFlow)}</td>
+                      <td className="px-2 py-1 text-right">{formatCurrency(cumulativeCashFlow)}</td>
+                      <td className="px-2 py-1 text-right">{formatCurrency(discountedCashFlow)}</td>
+                      <td className="px-2 py-1 text-right">{formatPercentage(cumulativeROI)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="mt-4 space-y-2">
+              <p><strong>Initial Investment:</strong> {formatCurrency(totalProjectCost)}</p>
+              <p><strong>NPV:</strong> {formatCurrency(financialMetrics.npv)}</p>
+              <p><strong>IRR:</strong> {formatPercentage(financialMetrics.irr)}</p>
+              <p><strong>Payback Period:</strong> {formatYears(financialMetrics.paybackPeriod)}</p>
+              <p><strong>ROI:</strong> {formatPercentage(financialMetrics.roi)}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Button onClick={generatePDF} className="mt-4">
+          Generate PDF Report
+        </Button>
       </div>
     </TooltipProvider>
   );
