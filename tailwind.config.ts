@@ -56,9 +56,24 @@ const config: Config = {
       borderColor: {
         DEFAULT: "hsl(var(--border))",
       },
+      textShadow: {
+        DEFAULT: '0 2px 4px rgba(0,0,0,0.1)',
+      },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    function ({ addUtilities }) {
+      const newUtilities = {
+        '.text-shadow': {
+          textShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        },
+        '.text-shadow-none': {
+          textShadow: 'none',
+        },
+      }
+      addUtilities(newUtilities)
+    }
+  ],
 }
 
 export default config
