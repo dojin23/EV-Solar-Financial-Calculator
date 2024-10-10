@@ -11,7 +11,6 @@ import { DollarSign, Zap, Sun, HelpCircle, Battery, TrendingUp, Clock, CreditCar
 import { CashFlowTable } from "@/components/ui/CashFlowTable";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CheckIcon } from '@heroicons/react/24/solid';
 import { Button } from "@/components/ui/button";
 import { pdf } from '@react-pdf/renderer';
 import FinancialReportPDF from './FinancialReportPDF';
