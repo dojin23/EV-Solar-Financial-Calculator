@@ -238,7 +238,6 @@ export default function FinancialCalculator() {
       evEnergyDemand,
       solarEnergyUsed,
       roi,
-      annualizedROI
     };
   }, [evDetails, solarSystem, baselineElectricity.rate, loanDetails, totalProjectCost, totalIncentives, netProjectCost, baseTaxCreditAmount, additionalTaxCreditAmount, utilityRebateAmount, totalSrecRevenue, annualSrecRevenue, evChargeEscalator, financingType, solarOffset, gridElectricity, annualUtilityRate, includeBattery, batteryDetails, macrsSchedule, maintenanceCosts.batteryAnnual, maintenanceCosts.evChargerAnnual, maintenanceCosts.solarAnnual]);
 
