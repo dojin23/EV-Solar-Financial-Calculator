@@ -11,8 +11,12 @@ interface SensitivityAnalysisProps {
     roi: number;
   };
   evDetails: {
+    numStations: number;
+    costPerStation: number;
     pricePerKwh: number;
     sessionsPerDay: number;
+    energyPerSession: number;
+    operationalYears: number;
   };
   solarSystem: {
     systemSize: number;
@@ -24,10 +28,10 @@ interface SensitivityAnalysisProps {
   loanDetails: {
     apr: number;
   };
-  updateEvDetails: (newDetails: Partial<typeof evDetails>) => void;
-  updateSolarSystem: (newSystem: Partial<typeof solarSystem>) => void;
-  updateIncentives: (newIncentives: Partial<typeof incentives>) => void;
-  updateLoanDetails: (newDetails: Partial<typeof loanDetails>) => void;
+  updateEvDetails: (newDetails: Partial<SensitivityAnalysisProps['evDetails']>) => void;
+  updateSolarSystem: (newSystem: Partial<SensitivityAnalysisProps['solarSystem']>) => void;
+  updateIncentives: (newIncentives: Partial<SensitivityAnalysisProps['incentives']>) => void;
+  updateLoanDetails: (newDetails: Partial<SensitivityAnalysisProps['loanDetails']>) => void;
 }
 
 const formatPercentage = (value: number | null): string => {

@@ -82,6 +82,20 @@ const calculateLoanPayment = (principal: number, annualRate: number, termYears: 
   return principal * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments) / (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
 };
 
+export type CashFlow = {
+  year: number;
+  evRevenue: number;
+  gridCost: number;
+  maintenanceCost: number;
+  loanPayment: number;
+  profit: number;
+  taxes: number;
+  depreciation: number;
+  cashFlow: number;
+  cumulativeCashFlow: number;
+  discountedCashFlow: number;
+};
+
 export default function FinancialCalculator() {
   // All useState hooks
   const [financingType, setFinancingType] = useState('cash');
@@ -1074,8 +1088,6 @@ export default function FinancialCalculator() {
             </div>
           </CardContent>
         </Card>
-
-        <DepreciationSchedule schedule={financialMetrics.cashFlows.map(flow => ({ year: flow.year, depreciation: flow.depreciation }))} />
 
         <Button onClick={generatePDF} className="mt-4">
           Generate PDF Report

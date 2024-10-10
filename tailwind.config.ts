@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss"
+import plugin from 'tailwindcss/plugin'
 
 const config: Config = {
   content: [
@@ -62,17 +63,23 @@ const config: Config = {
     },
   },
   plugins: [
-    function ({ addUtilities }) {
+    plugin(function({ addUtilities }) {
       const newUtilities = {
         '.text-shadow': {
           textShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        },
+        '.text-shadow-md': {
+          textShadow: '0 4px 8px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.08)',
+        },
+        '.text-shadow-lg': {
+          textShadow: '0 15px 30px rgba(0,0,0,0.11), 0 5px 15px rgba(0,0,0,0.08)',
         },
         '.text-shadow-none': {
           textShadow: 'none',
         },
       }
       addUtilities(newUtilities)
-    }
+    })
   ],
 }
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
+import { CashFlow } from './FinancialCalculator';
 
 const styles = StyleSheet.create({
   page: { padding: 30 },
@@ -7,7 +8,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, textAlign: 'center', marginBottom: 20 },
   subtitle: { fontSize: 18, marginBottom: 10 },
   text: { fontSize: 12, marginBottom: 5 },
-  table: { display: 'table', width: 'auto', borderStyle: 'solid', borderWidth: 1, borderRightWidth: 0, borderBottomWidth: 0 },
+  table: { display: 'flex', width: 'auto', borderStyle: 'solid', borderWidth: 1, borderRightWidth: 0, borderBottomWidth: 0 },
   tableRow: { margin: 'auto', flexDirection: 'row' },
   tableCol: { width: '25%', borderStyle: 'solid', borderWidth: 1, borderLeftWidth: 0, borderTopWidth: 0 },
   tableCell: { margin: 'auto', marginTop: 5, fontSize: 10 },
@@ -17,23 +18,36 @@ const styles = StyleSheet.create({
   footer: { position: 'absolute', bottom: 30, left: 30, right: 30, textAlign: 'center', color: 'grey', fontSize: 10 },
 });
 
-const formatCurrency = (value) => `$${value.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
+const formatCurrency = (value: number) => `$${value.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
 
-const formatPercentage = (value) => `${value.toFixed(2)}%`;
+const formatPercentage = (value: number) => `${value.toFixed(2)}%`;
 
-const formatIRRandROI = (value) => {
+const formatIRRandROI = (value: number) => {
   // Assuming the value is passed as a percentage (e.g., 45.06 for 45.06%)
   return `${value.toFixed(2)}%`;
 };
 
-const MetricCard = ({ title, value }) => (
+interface MetricCardProps {
+  title: string;
+  value: string | number;
+}
+
+const MetricCard: React.FC<MetricCardProps> = ({ title, value }) => (
   <View style={styles.metricCard}>
     <Text style={styles.metricTitle}>{title}</Text>
     <Text style={styles.metricValue}>{value}</Text>
   </View>
 );
 
-const FinancialReportPDF = ({ financialMetrics, cashFlows, evDetails, solarSystem }) => (
+// Define an interface for the component props
+interface FinancialReportPDFProps {
+  financialMetrics: any; // Replace 'any' with a more specific type if possible
+  cashFlows: any; // Replace 'any' with a more specific type if possible
+  evDetails: any; // Replace 'any' with a more specific type if possible
+  solarSystem: any; // Replace 'any' with a more specific type if possible
+}
+
+const FinancialReportPDF: React.FC<FinancialReportPDFProps> = ({ financialMetrics, cashFlows, evDetails, solarSystem }) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <Text style={styles.title}>EV Charging Station and Solar System Financial Report</Text>
@@ -70,7 +84,7 @@ const FinancialReportPDF = ({ financialMetrics, cashFlows, evDetails, solarSyste
           <View style={styles.tableCol}><Text style={styles.tableCell}>Total Expenses</Text></View>
           <View style={styles.tableCol}><Text style={styles.tableCell}>Cash Flow</Text></View>
         </View>
-        {cashFlows.slice(0, 10).map((flow, index) => (
+        {cashFlows.slice(0, 10).map((flow: CashFlow, index: number) => (
           <View style={styles.tableRow} key={flow.year}>
             <View style={styles.tableCol}><Text style={styles.tableCell}>{flow.year}</Text></View>
             <View style={styles.tableCol}><Text style={styles.tableCell}>{formatCurrency(flow.evRevenue)}</Text></View>
