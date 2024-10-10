@@ -543,7 +543,7 @@ export default function FinancialCalculator() {
     return JSON.stringify(debugOutput, null, 2);
   };
 
-  const DepreciationSchedule = ({ schedule }: { schedule: number[] }) => (
+  const DepreciationSchedule = ({ schedule }: { schedule: Array<{ year: number; depreciation: number }> }) => (
     <table>
       <thead>
         <tr>
@@ -1074,6 +1074,8 @@ export default function FinancialCalculator() {
             </div>
           </CardContent>
         </Card>
+
+        <DepreciationSchedule schedule={financialMetrics.cashFlows.map(flow => ({ year: flow.year, depreciation: flow.depreciation }))} />
 
         <Button onClick={generatePDF} className="mt-4">
           Generate PDF Report
