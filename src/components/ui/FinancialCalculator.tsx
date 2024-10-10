@@ -239,7 +239,29 @@ export default function FinancialCalculator() {
       solarEnergyUsed,
       roi,
     };
-  }, [evDetails, solarSystem, baselineElectricity.rate, loanDetails, totalProjectCost, totalIncentives, netProjectCost, baseTaxCreditAmount, additionalTaxCreditAmount, utilityRebateAmount, totalSrecRevenue, annualSrecRevenue, evChargeEscalator, financingType, solarOffset, gridElectricity, annualUtilityRate, includeBattery, batteryDetails, macrsSchedule, maintenanceCosts.batteryAnnual, maintenanceCosts.evChargerAnnual, maintenanceCosts.solarAnnual]);
+  }, [
+    evDetails,
+    solarSystem,
+    loanDetails,
+    totalProjectCost,
+    totalIncentives,
+    netProjectCost,
+    baseTaxCreditAmount,
+    additionalTaxCreditAmount,
+    utilityRebateAmount,
+    annualSrecRevenue,
+    evChargeEscalator,
+    financingType,
+    solarOffset,
+    gridElectricity,
+    annualUtilityRate,
+    includeBattery,
+    batteryDetails,
+    macrsSchedule,
+    maintenanceCosts.batteryAnnual,
+    maintenanceCosts.evChargerAnnual,
+    maintenanceCosts.solarAnnual
+  ]);
 
   // All useCallback hooks
   const validateInput = useCallback((value: string, min: number, max: number) => {
