@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { pdf } from '@react-pdf/renderer';
 import FinancialReportPDF from './FinancialReportPDF';
+import { CheckIcon } from '@heroicons/react/24/solid';
 
 // Utility functions
 const formatCurrency = (value: number | null): string => {
@@ -239,7 +240,7 @@ export default function FinancialCalculator() {
       roi,
       annualizedROI
     };
-  }, [evDetails, solarSystem, baselineElectricity.rate, loanDetails, totalProjectCost, totalIncentives, netProjectCost, baseTaxCreditAmount, additionalTaxCreditAmount, utilityRebateAmount, totalSrecRevenue, annualSrecRevenue, evChargeEscalator, financingType, solarOffset, gridElectricity, annualUtilityRate, includeBattery, batteryDetails]);
+  }, [evDetails, solarSystem, baselineElectricity.rate, loanDetails, totalProjectCost, totalIncentives, netProjectCost, baseTaxCreditAmount, additionalTaxCreditAmount, utilityRebateAmount, totalSrecRevenue, annualSrecRevenue, evChargeEscalator, financingType, solarOffset, gridElectricity, annualUtilityRate, includeBattery, batteryDetails, macrsSchedule, maintenanceCosts.batteryAnnual, maintenanceCosts.evChargerAnnual, maintenanceCosts.solarAnnual]);
 
   // All useCallback hooks
   const validateInput = useCallback((value: string, min: number, max: number) => {
