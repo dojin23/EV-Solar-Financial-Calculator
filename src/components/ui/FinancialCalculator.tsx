@@ -160,9 +160,8 @@ export default function FinancialCalculator() {
   const totalIncentives = baseTaxCreditAmount + additionalTaxCreditAmount + utilityRebateAmount;
   const netProjectCost = totalProjectCost - totalIncentives;
 
-  const macrsSchedule = [0.2, 0.32, 0.192, 0.1152, 0.1152, 0.0576, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-
   const financialMetrics = useMemo(() => {
+    const macrsSchedule = [0.2, 0.32, 0.192, 0.1152, 0.1152, 0.0576, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
     const annualEvRevenue = evDetails.numStations * evDetails.sessionsPerDay * evDetails.energyPerSession * evDetails.pricePerKwh * 365;
     const loanTotalCost = financingType === 'loan' ? (loanDetails.apr / 100 * loanDetails.term * (totalProjectCost - loanDetails.downPayment)) + totalProjectCost : 0;
     const initialInvestment = netProjectCost;
@@ -257,7 +256,6 @@ export default function FinancialCalculator() {
     annualUtilityRate,
     includeBattery,
     batteryDetails,
-    macrsSchedule,
     maintenanceCosts.batteryAnnual,
     maintenanceCosts.evChargerAnnual,
     maintenanceCosts.solarAnnual
@@ -545,7 +543,7 @@ export default function FinancialCalculator() {
     return JSON.stringify(debugOutput, null, 2);
   };
 
-  const DepreciationSchedule = ({ schedule }) => (
+  const DepreciationSchedule = ({ schedule }: { schedule: number[] }) => (
     <table>
       <thead>
         <tr>
