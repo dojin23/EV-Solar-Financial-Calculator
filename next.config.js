@@ -6,9 +6,4 @@ const nextConfig = {
   },
 }
 
-if (process.env.NODE_ENV === 'production') {
-  nextConfig.basePath = '/ev-solar-calculator'
-  nextConfig.assetPrefix = '/ev-solar-calculator/'
-}
-
 module.exports = nextConfig
